@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.31321.278
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "makeavifiles.Server", "makeavifiles\Server\makeavifiles.Server.csproj", "{FA162CD8-F0A0-421B-B6C2-27C7B669D8CC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "makeavifiles.Server", "makeavifiles\Server\makeavifiles.Server.csproj", "{FA162CD8-F0A0-421B-B6C2-27C7B669D8CC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "makeavifiles.Client", "makeavifiles\Client\makeavifiles.Client.csproj", "{EFBE49DF-947D-4AA7-B3DC-45A3DE3CE113}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "makeavifiles.Client", "makeavifiles\Client\makeavifiles.Client.csproj", "{EFBE49DF-947D-4AA7-B3DC-45A3DE3CE113}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "makeavifiles.Shared", "makeavifiles\Shared\makeavifiles.Shared.csproj", "{D3E27074-811B-4B05-92A2-595703B79CA6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "makeavifiles.Shared", "makeavifiles\Shared\makeavifiles.Shared.csproj", "{D3E27074-811B-4B05-92A2-595703B79CA6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

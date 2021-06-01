@@ -1,7 +1,13 @@
 ﻿@page "/"
 
-<h1>Hello, world!</h1>
+<h1>Make an AVI File</h1>
 
-Welcome to your new app.
+<p>Convert images and videos to a very specificly formatted AVI file.</p>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+<div>
+    <p>Copyright @year Some Guy with a Keyboard</p>
+</div>
+
+@code {
+    private int year = DateTime.Now.Year;
+}

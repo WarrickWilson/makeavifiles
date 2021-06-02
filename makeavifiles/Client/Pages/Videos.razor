@@ -145,10 +145,10 @@
 
             //Download the file instantly
             //Console.WriteLine($"Downloading file...");
-            _stopWatch.Restart();
+            var msPreDownload =_stopWatch.ElapsedMilliseconds;
             FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
-            _stopWatch.Stop();
-            RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
+            var msPostDownload = _stopWatch.ElapsedMilliseconds;
+            RecordTime("Download file", msPostDownload - msPreDownload);
             currentPass = 0;
             //Console.WriteLine($"Download complete.");
 

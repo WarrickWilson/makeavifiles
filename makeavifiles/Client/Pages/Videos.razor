@@ -1,7 +1,163 @@
 ﻿@page "/videos"
+@using System.IO;
+@using System.Diagnostics;
+@using FFmpegBlazor
+@inject IJSRuntime Runtime
+@using Microsoft.AspNetCore.Components.Forms
 
 <h3>Convert a Video</h3>
 
-@code {
+<InputFile OnChange="fileLoad" />
+<br />
+<br />
+<button class="btn btn-primary" @onclick="Process">Convert to AVI</button>
+<br />
+<br />
 
+@code
+{
+    string url; string url2;
+    string inputFileName;
+    string outputFileName;
+    FFMPEG ff;
+    byte[] buffer;
+    Stopwatch _stopWatch = new Stopwatch();
+    List<string> times = new List<string>();
+    int currentPass = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _stopWatch.Start();
+        if (FFmpegFactory.Runtime == null)
+        {
+            FFmpegFactory.Logger += WriteLogs;
+            FFmpegFactory.Progress += ProgressChange;
+        }
+
+        //initialize Library
+        await FFmpegFactory.Init(Runtime);
+        _stopWatch.Stop();
+        RecordTime("OnInitializeAsync", _stopWatch.ElapsedMilliseconds);
+    }
+
+    private void RecordTime(string msg, long elapsedMs)
+    {
+        times.Add(String.Format($"{msg}: {elapsedMs}"));
+    }
+
+    async void fileLoad(InputFileChangeEventArgs v)
+    {
+        _stopWatch.Restart();
+        //get first file from input selection
+        var file = v.GetMultipleFiles()[0];
+
+        inputFileName = file.Name;
+        var inputName = Path.GetFileNameWithoutExtension(inputFileName);
+        var fileExtension = Path.GetExtension(inputFileName);
+        // TODO: If extension is AVI, check that the file does not meet standards in order to continue processing
+        outputFileName = inputName + ".avi";
+        Console.WriteLine($"input file: {inputFileName}");
+        Console.WriteLine($"name only: {inputName}");
+        Console.WriteLine($"output file: {outputFileName}");
+        Console.WriteLine($"content type: {file.ContentType}");
+
+
+        //read all bytes
+        using var stream = file.OpenReadStream(100000000); //Max size for file that can be read
+        buffer = new byte[file.Size];
+
+        //read all bytes
+        await stream.ReadAsync(buffer);
+        _stopWatch.Stop();
+        RecordTime("File load", _stopWatch.ElapsedMilliseconds);
+
+        //reRender DOM
+        StateHasChanged();
+    }
+
+    async void Process()
+    {
+        times.Clear();
+        _stopWatch.Restart();
+
+        //create an instance
+        ff = FFmpegFactory.CreateFFmpeg(new FFmpegConfig() { Log = true });
+        var createMpegMs = _stopWatch.ElapsedMilliseconds;
+
+        //download all dependencies from cdn
+        await ff.Load();
+        var ffLoadMs = _stopWatch.ElapsedMilliseconds;
+
+        if (!ff.IsLoaded) return;
+
+        //write buffer to in-memory files (special emscripten files, Ffmpeg only interact with this file)
+        ff.WriteFile(inputFileName, buffer);
+        var ffWriteFileMs = _stopWatch.ElapsedMilliseconds;
+
+        //Pass CLI argument here 
+        // Pass 1
+        currentPass = 1;
+        await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-an", "-pass", "1", outputFileName);
+        var msPass1 = _stopWatch.ElapsedMilliseconds;
+
+        currentPass = 2;
+        await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-b:a", "96k", "-pass", "2", outputFileName);
+        _stopWatch.Stop();
+        var msPass2 = _stopWatch.ElapsedMilliseconds;
+
+        RecordTime("Create FFMpeg Instance", createMpegMs);
+        RecordTime("Load FFMpeg", ffLoadMs - createMpegMs);
+        RecordTime("Write file", ffWriteFileMs - ffLoadMs);
+        RecordTime("Pass 1", msPass1 - ffWriteFileMs);
+        RecordTime("Pass 2", msPass2 - msPass1);
+
+        //delete in-memory file
+        ff.UnlinkFile(inputFileName);
+        currentPass = 0;
+
+        var res = await ff.ReadFile(outputFileName);
+
+        ////Download the file instantly
+        ////Console.WriteLine($"Downloading file...");
+        //_stopWatch.Restart();
+        //FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
+        //_stopWatch.Stop();
+        //RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
+
+        Console.WriteLine("==================");
+        foreach (var row in times)
+        {
+            Console.WriteLine(row);
+        }
+    }
+
+    async void ProgressChange(Progress m)
+    {
+        // display progress % (0-1)
+        Console.WriteLine($"Progress {m.Ratio}");
+
+        //if ffmpeg processing is complete (generate a media URL so that it can be played or alternatively download that file)
+        // for two-pass video encoding, this means that second pass is active
+        if (m.Ratio == 1 && currentPass == 2)
+        {
+            //get bytepointer from c wasm to c#
+            var res = await ff.ReadFile(outputFileName);
+
+            //Download the file instantly
+            //Console.WriteLine($"Downloading file...");
+            var msPreDownload =_stopWatch.ElapsedMilliseconds;
+            FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
+            var msPostDownload = _stopWatch.ElapsedMilliseconds;
+            RecordTime("Download file", msPostDownload - msPreDownload);
+            currentPass = 0;
+            //Console.WriteLine($"Download complete.");
+
+            StateHasChanged();
+        }
+    }
+
+    void WriteLogs(Logs m)
+    {
+        Console.WriteLine(m.Type + " " + m.Message);
+    }
 }

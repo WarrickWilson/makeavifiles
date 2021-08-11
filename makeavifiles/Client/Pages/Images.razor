@@ -3,6 +3,7 @@
 @using System.Diagnostics;
 @using FFmpegBlazor
 @inject IJSRuntime Runtime
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Forms
 
 <h3>Convert an Image</h3>
@@ -30,13 +31,21 @@
         if (FFmpegFactory.Runtime == null)
         {
             FFmpegFactory.Logger += WriteLogs;
-            FFmpegFactory.Progress += ProgressChange;
+            //FFmpegFactory.Progress += ProgressChange;
         }
 
         //initialize Library
         await FFmpegFactory.Init(Runtime);
         _stopWatch.Stop();
         RecordTime("OnInitializeAsync", _stopWatch.ElapsedMilliseconds);
+    }
+
+    public void Dispose()
+    {
+        if (FFmpegFactory.Runtime != null)
+        {
+            FFmpegFactory.Logger -= WriteLogs;
+        }
     }
 
     private void RecordTime(string msg, long elapsedMs)
@@ -103,14 +112,33 @@
         RecordTime("Write file", ffWriteFileMs - ffLoadMs);
         RecordTime("After Run", ffWriteFileMs - ffRunMs);
 
+        DownloadFile();
+
         //delete in-memory file
         ff.UnlinkFile(inputFileName);
+        ff.UnlinkFile(outputFileName);
 
         Console.WriteLine("==================");
         foreach (var row in times)
         {
             Console.WriteLine(row);
         }
+    }
+
+    async void DownloadFile()
+    {
+        //get bytepointer from c wasm to c#
+        var res = await ff.ReadFile(outputFileName);
+
+        //Download the file instantly
+        //Console.WriteLine($"Downloading file...");
+        _stopWatch.Restart();
+        FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
+        _stopWatch.Stop();
+        RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
+        //Console.WriteLine($"Download complete.");
+
+        StateHasChanged();
     }
 
     async void ProgressChange(Progress m)

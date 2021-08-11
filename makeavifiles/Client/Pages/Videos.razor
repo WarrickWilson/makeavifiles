@@ -31,13 +31,21 @@
         if (FFmpegFactory.Runtime == null)
         {
             FFmpegFactory.Logger += WriteLogs;
-            FFmpegFactory.Progress += ProgressChange;
+            //FFmpegFactory.Progress += ProgressChange;
         }
 
         //initialize Library
         await FFmpegFactory.Init(Runtime);
         _stopWatch.Stop();
         RecordTime("OnInitializeAsync", _stopWatch.ElapsedMilliseconds);
+    }
+
+    public void Dispose()
+    {
+        if (FFmpegFactory.Runtime != null)
+        {
+            FFmpegFactory.Logger -= WriteLogs;
+        }
     }
 
     private void RecordTime(string msg, long elapsedMs)
@@ -60,7 +68,6 @@
         Console.WriteLine($"name only: {inputName}");
         Console.WriteLine($"output file: {outputFileName}");
         Console.WriteLine($"content type: {file.ContentType}");
-
 
         //read all bytes
         using var stream = file.OpenReadStream(100000000); //Max size for file that can be read
@@ -105,6 +112,8 @@
         _stopWatch.Stop();
         var msPass2 = _stopWatch.ElapsedMilliseconds;
 
+        DownloadFile();
+
         RecordTime("Create FFMpeg Instance", createMpegMs);
         RecordTime("Load FFMpeg", ffLoadMs - createMpegMs);
         RecordTime("Write file", ffWriteFileMs - ffLoadMs);
@@ -113,9 +122,10 @@
 
         //delete in-memory file
         ff.UnlinkFile(inputFileName);
+        ff.UnlinkFile(outputFileName);
         currentPass = 0;
 
-        var res = await ff.ReadFile(outputFileName);
+        //var res = await ff.ReadFile(outputFileName);
 
         ////Download the file instantly
         ////Console.WriteLine($"Downloading file...");
@@ -129,6 +139,22 @@
         {
             Console.WriteLine(row);
         }
+    }
+
+    async void DownloadFile()
+    {
+        //get bytepointer from c wasm to c#
+        var res = await ff.ReadFile(outputFileName);
+
+        //Download the file instantly
+        //Console.WriteLine($"Downloading file...");
+        _stopWatch.Restart();
+        FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
+        _stopWatch.Stop();
+        RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
+        //Console.WriteLine($"Download complete.");
+
+        StateHasChanged();
     }
 
     async void ProgressChange(Progress m)

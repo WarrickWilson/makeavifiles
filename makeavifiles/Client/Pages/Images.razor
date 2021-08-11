@@ -1,9 +1,9 @@
 ﻿@page "/images"
+@implements IDisposable
 @using System.IO;
 @using System.Diagnostics;
 @using FFmpegBlazor
 @inject IJSRuntime Runtime
-@implements IDisposable
 @using Microsoft.AspNetCore.Components.Forms
 
 <h3>Convert an Image</h3>
@@ -14,10 +14,11 @@
 <button class="btn btn-primary" @onclick="Process">Convert to AVI</button>
 <br />
 <br />
+<div id="statusmsg">@statusmsg</div>
 
 @code
 {
-    string url; string url2;
+    string statusmsg = String.Empty;
     string inputFileName;
     string outputFileName;
     FFMPEG ff;
@@ -28,9 +29,10 @@
     protected override async Task OnInitializedAsync()
     {
         _stopWatch.Start();
+
         if (FFmpegFactory.Runtime == null)
         {
-            FFmpegFactory.Logger += WriteLogs;
+            //FFmpegFactory.Logger += WriteLogs;
             //FFmpegFactory.Progress += ProgressChange;
         }
 
@@ -38,13 +40,15 @@
         await FFmpegFactory.Init(Runtime);
         _stopWatch.Stop();
         RecordTime("OnInitializeAsync", _stopWatch.ElapsedMilliseconds);
+
     }
 
     public void Dispose()
     {
         if (FFmpegFactory.Runtime != null)
         {
-            FFmpegFactory.Logger -= WriteLogs;
+            //FFmpegFactory.Logger -= WriteLogs;
+            //FFmpegFactory.Progress -= ProgressChange;
         }
     }
 
@@ -85,6 +89,8 @@
 
     async void Process()
     {
+        ShowStatus("Starting conversion...");
+
         times.Clear();
         _stopWatch.Restart();
 
@@ -112,6 +118,7 @@
         RecordTime("Write file", ffWriteFileMs - ffLoadMs);
         RecordTime("After Run", ffWriteFileMs - ffRunMs);
 
+        ShowStatus("Starting download...");
         DownloadFile();
 
         //delete in-memory file
@@ -123,6 +130,8 @@
         {
             Console.WriteLine(row);
         }
+
+        ShowStatus("");
     }
 
     async void DownloadFile()
@@ -174,5 +183,11 @@
     void WriteLogs(Logs m)
     {
         Console.WriteLine(m.Type + " " + m.Message);
+    }
+
+    void ShowStatus(string msg)
+    {
+        statusmsg = msg;
+        StateHasChanged();
     }
 }

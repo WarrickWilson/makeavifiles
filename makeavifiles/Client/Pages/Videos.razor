@@ -1,4 +1,5 @@
 ﻿@page "/videos"
+@implements IDisposable
 @using System.IO;
 @using System.Diagnostics;
 @using FFmpegBlazor
@@ -13,10 +14,11 @@
 <button class="btn btn-primary" @onclick="Process">Convert to AVI</button>
 <br />
 <br />
+<div id="statusmsg">@statusmsg</div>
 
 @code
 {
-    string url; string url2;
+    string statusmsg = String.Empty;
     string inputFileName;
     string outputFileName;
     string tmpOutputFileName;
@@ -31,7 +33,7 @@
         _stopWatch.Start();
         if (FFmpegFactory.Runtime == null)
         {
-            FFmpegFactory.Logger += WriteLogs;
+            //FFmpegFactory.Logger += WriteLogs;
             //FFmpegFactory.Progress += ProgressChange;
         }
 
@@ -45,7 +47,8 @@
     {
         if (FFmpegFactory.Runtime != null)
         {
-            FFmpegFactory.Logger -= WriteLogs;
+            //FFmpegFactory.Logger -= WriteLogs;
+            //FFmpegFactory.Progress -= ProgressChange;
         }
     }
 
@@ -76,6 +79,7 @@
         Console.WriteLine($"output file: {outputFileName}");
         Console.WriteLine($"content type: {file.ContentType}");
 
+
         //read all bytes
         using var stream = file.OpenReadStream(100000000); //Max size for file that can be read
         buffer = new byte[file.Size];
@@ -91,6 +95,8 @@
 
     async void Process()
     {
+        ShowStatus("Starting conversion...");
+
         times.Clear();
         _stopWatch.Restart();
 
@@ -111,15 +117,15 @@
         //Pass CLI argument here 
         // Pass 1
         currentPass = 1;
+        ShowStatus("Pass 1 of 2 starting...");
         await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-an", "-pass", "1", tmpOutputFileName);
         var msPass1 = _stopWatch.ElapsedMilliseconds;
 
         currentPass = 2;
+        ShowStatus("Pass 2 of 2 starting...");
         await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-b:a", "96k", "-pass", "2", outputFileName);
         _stopWatch.Stop();
         var msPass2 = _stopWatch.ElapsedMilliseconds;
-
-        DownloadFile();
 
         RecordTime("Create FFMpeg Instance", createMpegMs);
         RecordTime("Load FFMpeg", ffLoadMs - createMpegMs);
@@ -127,14 +133,15 @@
         RecordTime("Pass 1", msPass1 - ffWriteFileMs);
         RecordTime("Pass 2", msPass2 - msPass1);
 
-        var res = await ff.ReadFile(outputFileName);
+        ShowStatus("Starting download...");
+        DownloadFile();
+        //var res = await ff.ReadFile(outputFileName);
 
         //delete in-memory file
         ff.UnlinkFile(inputFileName);
+        ff.UnlinkFile(tmpOutputFileName);
         ff.UnlinkFile(outputFileName);
         currentPass = 0;
-
-        //var res = await ff.ReadFile(outputFileName);
 
         ////Download the file instantly
         ////Console.WriteLine($"Downloading file...");
@@ -148,6 +155,8 @@
         {
             Console.WriteLine(row);
         }
+
+        ShowStatus("");
     }
 
     async void DownloadFile()
@@ -187,7 +196,7 @@
 
             //Download the file instantly
             //Console.WriteLine($"Downloading file...");
-            var msPreDownload =_stopWatch.ElapsedMilliseconds;
+            var msPreDownload = _stopWatch.ElapsedMilliseconds;
             FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
             var msPostDownload = _stopWatch.ElapsedMilliseconds;
             RecordTime("Download file", msPostDownload - msPreDownload);
@@ -201,5 +210,11 @@
     void WriteLogs(Logs m)
     {
         Console.WriteLine(m.Type + " " + m.Message);
+    }
+
+    void ShowStatus(string msg)
+    {
+        statusmsg = msg;
+        StateHasChanged();
     }
 }

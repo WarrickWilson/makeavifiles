@@ -19,6 +19,7 @@
     string url; string url2;
     string inputFileName;
     string outputFileName;
+    string tmpOutputFileName;
     FFMPEG ff;
     byte[] buffer;
     Stopwatch _stopWatch = new Stopwatch();
@@ -64,6 +65,12 @@
         var fileExtension = Path.GetExtension(inputFileName);
         // TODO: If extension is AVI, check that the file does not meet standards in order to continue processing
         outputFileName = inputName + ".avi";
+        if (outputFileName == inputFileName)
+        {
+            outputFileName = inputName + "_conv" + ".avi";
+        }
+        tmpOutputFileName = "tmp_" + outputFileName;
+
         Console.WriteLine($"input file: {inputFileName}");
         Console.WriteLine($"name only: {inputName}");
         Console.WriteLine($"output file: {outputFileName}");
@@ -104,7 +111,7 @@
         //Pass CLI argument here 
         // Pass 1
         currentPass = 1;
-        await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-an", "-pass", "1", outputFileName);
+        await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-an", "-pass", "1", tmpOutputFileName);
         var msPass1 = _stopWatch.ElapsedMilliseconds;
 
         currentPass = 2;
@@ -119,6 +126,8 @@
         RecordTime("Write file", ffWriteFileMs - ffLoadMs);
         RecordTime("Pass 1", msPass1 - ffWriteFileMs);
         RecordTime("Pass 2", msPass2 - msPass1);
+
+        var res = await ff.ReadFile(outputFileName);
 
         //delete in-memory file
         ff.UnlinkFile(inputFileName);

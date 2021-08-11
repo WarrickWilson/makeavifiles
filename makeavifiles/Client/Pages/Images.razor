@@ -128,17 +128,24 @@
     async void DownloadFile()
     {
         //get bytepointer from c wasm to c#
-        var res = await ff.ReadFile(outputFileName);
+        try
+        {
+            var res = await ff.ReadFile(outputFileName);
 
-        //Download the file instantly
-        //Console.WriteLine($"Downloading file...");
-        _stopWatch.Restart();
-        FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
-        _stopWatch.Stop();
-        RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
-        //Console.WriteLine($"Download complete.");
+            //Download the file instantly
+            //Console.WriteLine($"Downloading file...");
+            _stopWatch.Restart();
+            FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
+            _stopWatch.Stop();
+            RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
+            //Console.WriteLine($"Download complete.");
 
-        StateHasChanged();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: error in DownloadFile: {ex.Message}" + Environment.NewLine + $"{ex.StackTrace}");
+        }
     }
 
     async void ProgressChange(Progress m)

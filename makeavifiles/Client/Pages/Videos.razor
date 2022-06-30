@@ -6,15 +6,32 @@
 @inject IJSRuntime Runtime
 @using Microsoft.AspNetCore.Components.Forms
 
+<style>
+    .statusmessage {
+        white-space: pre;
+    }
+</style>
+
 <h3>Convert a Video</h3>
 
 <InputFile OnChange="fileLoad" />
 <br />
 <br />
+<label for="videoDataRate">Select video data rate:</label>
+<select name="videoDataRate" id="videoDataRate" @bind="VideoDataRate">
+    <option value="400">400K</option>
+    <option value="450">450K</option>
+    <option value="500" selected>500K</option>
+    <option value="550">550K</option>
+    <option value="600">600K</option>
+    <option value="650">650K</option>
+</select>
+<br />
+<br />
 <button class="btn btn-primary" @onclick="Process">Convert to AVI</button>
 <br />
 <br />
-<div id="statusmsg">@statusmsg</div>
+<div class="statusmessage" id="statusmsg">@statusmsg</div>
 
 @code
 {
@@ -27,14 +44,29 @@
     Stopwatch _stopWatch = new Stopwatch();
     List<string> times = new List<string>();
     int currentPass = 0;
+    bool keepGoing = true;
+
+    int selectedVideoRate = 500;
+    private int? _videoRate = 500;
+    private int? VideoDataRate 
+    { 
+        get
+        {
+            return _videoRate;
+        }
+        set
+        {
+            _videoRate = value;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         _stopWatch.Start();
         if (FFmpegFactory.Runtime == null)
         {
-            //FFmpegFactory.Logger += WriteLogs;
-            //FFmpegFactory.Progress += ProgressChange;
+            FFmpegFactory.Logger += WriteLogs;
+            FFmpegFactory.Progress += ProgressChange;
         }
 
         //initialize Library
@@ -48,7 +80,7 @@
         if (FFmpegFactory.Runtime != null)
         {
             //FFmpegFactory.Logger -= WriteLogs;
-            //FFmpegFactory.Progress -= ProgressChange;
+            FFmpegFactory.Progress -= ProgressChange;
         }
     }
 
@@ -101,10 +133,15 @@
         _stopWatch.Restart();
 
         //create an instance
-        ff = FFmpegFactory.CreateFFmpeg(new FFmpegConfig() { Log = true });
+        ff = FFmpegFactory.CreateFFmpeg(new FFmpegConfig() { Log = false });
+        //ff = FFmpegFactory.CreateFFmpeg();
+
         var createMpegMs = _stopWatch.ElapsedMilliseconds;
 
         //download all dependencies from cdn
+        //ff.Progress += (p) => Console.WriteLine(p.Ratio);
+        //await ff.Load(true);
+
         await ff.Load();
         var ffLoadMs = _stopWatch.ElapsedMilliseconds;
 
@@ -114,28 +151,47 @@
         ff.WriteFile(inputFileName, buffer);
         var ffWriteFileMs = _stopWatch.ElapsedMilliseconds;
 
-        //Pass CLI argument here 
+        selectedVideoRate = VideoDataRate.Value;
+
         // Pass 1
         currentPass = 1;
         ShowStatus("Pass 1 of 2 starting...");
-        await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-an", "-pass", "1", tmpOutputFileName);
+        try
+        {
+            await ff.Run("-i", inputFileName, "-xerror", "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", $"{selectedVideoRate}k", "-an", "-pass", "1", tmpOutputFileName);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Pass 1 Exception: {ex.Message}");
+            keepGoing = false;
+        }
         var msPass1 = _stopWatch.ElapsedMilliseconds;
 
-        currentPass = 2;
-        ShowStatus("Pass 2 of 2 starting...");
-        await ff.Run("-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", "600k", "-b:a", "96k", "-pass", "2", outputFileName);
-        _stopWatch.Stop();
-        var msPass2 = _stopWatch.ElapsedMilliseconds;
+        if (keepGoing)
+        {
+            currentPass = 2;
+            ShowStatus("Pass 2 of 2 starting...");
+            try
+            {
+                await ff.Run("-i", inputFileName, "-xerror", "-s", "640x480", "-aspect", "4:3", "-vf", "fps=24", "-c:v", "mpeg4", "-vtag", "XVID", "-b:v", $"{selectedVideoRate}k", "-b:a", "96k", "-pass", "2", outputFileName);
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"Pass 2 Exception: {ex.Message}");
+            }
+            _stopWatch.Stop();
+            var msPass2 = _stopWatch.ElapsedMilliseconds;
 
-        RecordTime("Create FFMpeg Instance", createMpegMs);
-        RecordTime("Load FFMpeg", ffLoadMs - createMpegMs);
-        RecordTime("Write file", ffWriteFileMs - ffLoadMs);
-        RecordTime("Pass 1", msPass1 - ffWriteFileMs);
-        RecordTime("Pass 2", msPass2 - msPass1);
+            RecordTime("Create FFMpeg Instance", createMpegMs);
+            RecordTime("Load FFMpeg", ffLoadMs - createMpegMs);
+            RecordTime("Write file", ffWriteFileMs - ffLoadMs);
+            RecordTime("Pass 1", msPass1 - ffWriteFileMs);
+            RecordTime("Pass 2", msPass2 - msPass1);
 
-        ShowStatus("Starting download...");
-        DownloadFile();
-        //var res = await ff.ReadFile(outputFileName);
+            ShowStatus("Starting download...");
+            DownloadFile();
+            //var res = await ff.ReadFile(outputFileName);
+        }
 
         //delete in-memory file
         ff.UnlinkFile(inputFileName);
@@ -156,7 +212,16 @@
             Console.WriteLine(row);
         }
 
-        ShowStatus("");
+        ClearStatus();
+
+        try
+        {
+            ff.Exit();
+        }
+        catch
+        {
+            // Swallow this... bad form, but I'm not sure what to expect here
+        }
     }
 
     async void DownloadFile()
@@ -164,6 +229,7 @@
         //get bytepointer from c wasm to c#
         try
         {
+            StateHasChanged();
             var res = await ff.ReadFile(outputFileName);
 
             //Download the file instantly
@@ -182,24 +248,25 @@
         }
     }
 
-    async void ProgressChange(Progress m)
+    void ProgressChange(Progress m)
     {
         // display progress % (0-1)
         Console.WriteLine($"Progress {m.Ratio}");
 
         //if ffmpeg processing is complete (generate a media URL so that it can be played or alternatively download that file)
         // for two-pass video encoding, this means that second pass is active
-        if (m.Ratio == 1 && currentPass == 2)
+        if (m.Ratio >= 1.0 && currentPass == 2)
         {
             //get bytepointer from c wasm to c#
-            var res = await ff.ReadFile(outputFileName);
+            //var res = await ff.ReadFile(outputFileName);
 
-            //Download the file instantly
-            //Console.WriteLine($"Downloading file...");
-            var msPreDownload = _stopWatch.ElapsedMilliseconds;
-            FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
-            var msPostDownload = _stopWatch.ElapsedMilliseconds;
-            RecordTime("Download file", msPostDownload - msPreDownload);
+            ////Download the file instantly
+            ////Console.WriteLine($"Downloading file...");
+            //var msPreDownload = _stopWatch.ElapsedMilliseconds;
+            //FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
+            //var msPostDownload = _stopWatch.ElapsedMilliseconds;
+            //RecordTime("Download file", msPostDownload - msPreDownload);
+
             currentPass = 0;
             //Console.WriteLine($"Download complete.");
 
@@ -210,11 +277,26 @@
     void WriteLogs(Logs m)
     {
         Console.WriteLine(m.Type + " " + m.Message);
+
+        if (m.Type == "fferr")
+        {
+            if (m.Message.Contains("error:", StringComparison.InvariantCultureIgnoreCase))
+            {
+                keepGoing = false;
+                ShowStatus("Transcode encountered an error and has stopped");
+            }
+        }
     }
 
     void ShowStatus(string msg)
     {
-        statusmsg = msg;
+        statusmsg = (string.IsNullOrEmpty(statusmsg)) ? msg : statusmsg + Environment.NewLine + msg;
+        StateHasChanged();
+    }
+
+    void ClearStatus()
+    {
+        statusmsg = String.Empty;
         StateHasChanged();
     }
 }

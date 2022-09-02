@@ -18,6 +18,7 @@
 
 @code
 {
+    private const int _maxFileSizeAllowed = 200 * 1024 * 1024;  // 200 MB file limit
     string statusmsg = String.Empty;
     string inputFileName;
     string outputFileName;
@@ -73,15 +74,22 @@
         Console.WriteLine($"output file: {outputFileName}");
         Console.WriteLine($"content type: {file.ContentType}");
 
-
         //read all bytes
-        using var stream = file.OpenReadStream(100000000); //Max size for file that can be read
-        buffer = new byte[file.Size];
+        try
+        {
+            using var stream = file.OpenReadStream(_maxFileSizeAllowed); //Max size for file that can be read
+            buffer = new byte[file.Size];
 
-        //read all bytes
-        await stream.ReadAsync(buffer);
-        _stopWatch.Stop();
-        RecordTime("File load", _stopWatch.ElapsedMilliseconds);
+            //read all bytes
+            await stream.ReadAsync(buffer);
+            _stopWatch.Stop();
+            RecordTime("File load", _stopWatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex) 
+        {
+            // File was too big
+            ShowStatus($"Unable to read the file. Maximum file size allowed is {_maxFileSizeAllowed} bytes.");
+        }
 
         //reRender DOM
         StateHasChanged();

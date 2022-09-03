@@ -6,15 +6,23 @@
 @inject IJSRuntime Runtime
 @using Microsoft.AspNetCore.Components.Forms
 
+<style>
+    .statusmessage {
+        white-space: pre;
+        inline-size: min-content;
+        overflow-wrap: break-word;
+    }
+</style>
+
 <h3>Convert an Image</h3>
 
-<InputFile OnChange="fileLoad" />
+<InputFile OnChange="FileLoad" />
 <br />
 <br />
 <button class="btn btn-primary" @onclick="Process">Convert to AVI</button>
 <br />
 <br />
-<div id="statusmsg">@statusmsg</div>
+<div class="statusmessage" id="statusmsg">@statusmsg</div>
 
 @code
 {
@@ -26,6 +34,7 @@
     byte[] buffer;
     Stopwatch _stopWatch = new Stopwatch();
     List<string> times = new List<string>();
+    bool transcodeHasError = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -58,8 +67,11 @@
         times.Add(String.Format($"{msg}: {elapsedMs}"));
     }
 
-    async void fileLoad(InputFileChangeEventArgs v)
+    async void FileLoad(InputFileChangeEventArgs v)
     {
+        ClearStatus();
+
+        transcodeHasError = false;
         _stopWatch.Restart();
         //get first file from input selection
         var file = v.GetMultipleFiles()[0];
@@ -97,8 +109,10 @@
 
     async void Process()
     {
+        ClearStatus();
         ShowStatus("Starting conversion...");
 
+        transcodeHasError = false;
         times.Clear();
         _stopWatch.Restart();
 
@@ -127,7 +141,7 @@
         RecordTime("After Run", ffWriteFileMs - ffRunMs);
 
         ShowStatus("Starting download...");
-        DownloadFile();
+        await DownloadFileAsync();
 
         //delete in-memory file
         ff.UnlinkFile(inputFileName);
@@ -139,23 +153,37 @@
             Console.WriteLine(row);
         }
 
-        ShowStatus("");
+        if (!transcodeHasError)
+        {
+            ClearStatus();
+        }
     }
 
-    async void DownloadFile()
+    async Task DownloadFileAsync()
     {
         //get bytepointer from c wasm to c#
         try
         {
             var res = await ff.ReadFile(outputFileName);
 
-            //Download the file instantly
-            //Console.WriteLine($"Downloading file...");
-            _stopWatch.Restart();
-            FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
-            _stopWatch.Stop();
-            RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
-            //Console.WriteLine($"Download complete.");
+            var fileLength = res.Length;
+
+            if (fileLength <= 0)
+            {
+                // Transcode failed - show message
+                transcodeHasError = true;
+                ShowStatus($"No file was created. The selected file may not be a valid image format or the selected video data rate may be too low to create a working output file.");
+            }
+            else
+            {
+                //Download the file instantly
+                //Console.WriteLine($"Downloading file...");
+                _stopWatch.Restart();
+                FFmpegFactory.DownloadBufferAsFile(res, outputFileName, "video/x-msvideo");
+                _stopWatch.Stop();
+                RecordTime("Download file", _stopWatch.ElapsedMilliseconds);
+                //Console.WriteLine($"Download complete.");
+            }
 
             StateHasChanged();
         }
@@ -191,11 +219,26 @@
     void WriteLogs(Logs m)
     {
         Console.WriteLine(m.Type + " " + m.Message);
+
+        if (m.Type == "fferr")
+        {
+            if (m.Message.Contains("error:", StringComparison.InvariantCultureIgnoreCase))
+            {
+                transcodeHasError = true;
+                ShowStatus("Transcode encountered an error and has stopped");
+            }
+        }
     }
 
     void ShowStatus(string msg)
     {
-        statusmsg = msg;
+        statusmsg = (string.IsNullOrEmpty(statusmsg)) ? msg : statusmsg + Environment.NewLine + msg;
+        StateHasChanged();
+    }
+
+    void ClearStatus()
+    {
+        statusmsg = String.Empty;
         StateHasChanged();
     }
 }

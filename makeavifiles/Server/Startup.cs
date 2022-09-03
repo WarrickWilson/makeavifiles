@@ -44,8 +44,8 @@ namespace makeavifiles.Server
 
             app.Use(async (context, next) =>
             {
-                context.Response.Headers.Add("Cross-Origin-Embedder-Policy", "require-corp");
-                context.Response.Headers.Add("Cross-Origin-Opener-Policy", "same-origin");
+                //context.Response.Headers.Add("Cross-Origin-Embedder-Policy", "require-corp");
+                //context.Response.Headers.Add("Cross-Origin-Opener-Policy", "same-origin");
                 await next();
             });
 

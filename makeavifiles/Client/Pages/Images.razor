@@ -19,6 +19,21 @@
 <InputFile OnChange="FileLoad" />
 <br />
 <br />
+<label for="videoDataRate">Select video data rate:</label>
+<select name="videoDataRate" id="videoDataRate" @bind="VideoDataRate">
+    <option value="400">400K</option>
+    <option value="450">450K</option>
+    <option value="500" selected>500K</option>
+    <option value="550">550K</option>
+    <option value="600">600K</option>
+    <option value="650">650K</option>
+</select>
+<br />
+<br />
+<label for="gopValue">GOP Value:</label>
+<input type="number" min="12" max="9999" name="gopValue" id="gopValue" @bind="GopValue"/>
+<br />
+<br />
 <button class="btn btn-primary" @onclick="Process">Convert to AVI</button>
 <br />
 <br />
@@ -35,6 +50,28 @@
     Stopwatch _stopWatch = new Stopwatch();
     List<string> times = new List<string>();
     bool transcodeHasError = false;
+
+    private int selectedGopValue = 12;
+    private int? _gopValue = 12;
+    private int? GopValue
+    {
+        get { return _gopValue; }
+        set { _gopValue = value; }
+    }
+
+    int selectedVideoRate = 500;
+    private int? _videoRate = 500;
+    private int? VideoDataRate
+    {
+        get
+        {
+            return _videoRate;
+        }
+        set
+        {
+            _videoRate = value;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -131,7 +168,10 @@
         var ffWriteFileMs = _stopWatch.ElapsedMilliseconds;
 
         //Pass CLI argument here equivalent to ffmpeg -i myFile.mp4 output.mp3
-        await ff.Run("-f", "image2", "-loop", "1", "-t", "10", "-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-c:v", "mpeg4", "-vf", "fps=3", "-vtag", "XVID", "-an", outputFileName);
+        selectedVideoRate = VideoDataRate.Value;
+        selectedGopValue = GopValue.Value;
+
+        await ff.Run("-f", "image2", "-loop", "1", "-t", "10", "-i", inputFileName, "-s", "640x480", "-aspect", "4:3", "-c:v", "mpeg4", "-vf", "fps=24", "-b:v", $"{selectedVideoRate}k", "-g", selectedGopValue.ToString(), "-vtag", "XVID", "-an", outputFileName);
         _stopWatch.Stop();
         var ffRunMs = _stopWatch.ElapsedMilliseconds;
 
